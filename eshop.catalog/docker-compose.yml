@@ -1,0 +1,37 @@
+version: '3.4'
+
+networks: 
+  eshop: 
+    external: true
+
+
+services:
+  postgres: 
+    image: postgres:latest
+    container_name: postgres
+    volumes: 
+      - C:\MyData\pg2:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: "catalog"
+      POSTGRES_USER: "eshopcatalog"
+      POSTGRES_PASSWORD: "pgpwd4habr"
+    ports:
+      - "8081:5432"
+    networks: 
+      - eshop
+
+  catalog:
+    image: ${REGISTRY:-catalog}/api:${PLATFORM:-linux}-${TAG:-latest}
+    ports:
+      - "5002:80"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - POSTGRES_CONNECT_STR=Host=postgres;Port=5432;Database=catalog;Username=eshopcatalog;Password=pgpwd4habr
+      - ASPNETCORE_URLS=http://+:80
+    depends_on: 
+      - postgres
+    networks: 
+      - eshop

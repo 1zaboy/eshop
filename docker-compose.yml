@@ -1,0 +1,98 @@
+version: '3.4'
+
+networks: 
+  eshop: 
+    external: true
+
+
+services: 
+  postgres: 
+    image: postgres:latest
+    container_name: postgres
+    volumes: 
+      - C:\MyData\PostgeSQL:/var/lib/postgresql/data
+    environment: 
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: password
+    networks: 
+      - eshop
+
+  keycloak: 
+    image: jboss/keycloak:latest
+    environment: 
+      DB_ADDR: postgres
+      DB_USER: keycloak
+      DB_PASSWORD: password
+      KEYCLOAK_USER: kadmin
+      KEYCLOAK_PASSWORD: kadmin 
+    ports: 
+      - 8081:8080
+    depends_on: 
+      - postgres
+    networks: 
+      - eshop
+
+  rediscache:
+    image: redis:latest
+    container_name: rediscache
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    volumes:
+      - C:\MyData\eshop\Redis:/data
+    networks: 
+      - eshop
+
+  cart:
+    image: z1cat/eshop.cart:latest
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - REDIS_CONFIG=rediscache:6379,abortConnect=False,password=eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81,ssl=False
+    depends_on: 
+      - rediscache
+    networks: 
+      - eshop
+
+  postgres-catalog: 
+    image: postgres:latest
+    container_name: postgres-catalog
+    volumes: 
+      - C:\MyData\pg2:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: "catalog"
+      POSTGRES_USER: "eshopcatalog"
+      POSTGRES_PASSWORD: "pgpwd4habr"
+    # ports:
+    #   - "8081:5432"
+    networks: 
+      - eshop
+
+  catalog:
+    image: z1cat/eshop.catalog:latest
+    # ports:
+    #   - "5002:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - POSTGRES_CONNECT_STR=Host=postgres-catalog;Port=5432;Database=catalog;Username=eshopcatalog;Password=pgpwd4habr
+      - ASPNETCORE_URLS=http://+:80
+    depends_on: 
+      - postgres-catalog
+    networks: 
+      - eshop
+
+  krakend:
+    image: devopsfaith/krakend:latest
+    container_name: gateway
+    ports:
+      - 8080:8080
+    volumes:
+      - ./configs/krakend.json:/etc/krakend/krakend.json
+    command: ["run", "-d", "-c", "/etc/krakend/krakend.json"]
+    networks: 
+      - eshop
+    depends_on: 
+      - catalog
+      - cart
+      - keycloak
